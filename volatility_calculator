@@ -1,0 +1,111 @@
+import pandas as pd
+import yfinance as yf
+from datetime import date, timedelta
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+
+# define the time period for the data
+end_date = date.today().strftime("%Y-%m-%d") # format today's date as YYYY-MM-DD
+start_date = (date.today() - timedelta(days=365)).strftime("%Y-%m-%d") # set start_date as one year previous
+
+# list of stock tickers to download
+tickers = ["SPY","UNL","BMO","EQT","GEV","NFLX"]
+
+data = yf.download(tickers, start=start_date, end=end_date, progress=False, auto_adjust=False)
+
+# flatten column names
+data.columns = ['_'.join(col).strip() if isinstance(col, tuple) else col for col in data.columns.values]
+
+# reset index to bring Date into the columns for the melt function
+data = data.reset_index()
+
+# melt the DataFrame: from wide to long format
+data_melted = data.melt(id_vars=['Date'], var_name='Attribute_Ticker', value_name='value')
+
+# split 'Attribute_Ticker' into two columns
+data_melted[['Attribute', 'Ticker']] = data_melted['Attribute_Ticker'].str.split('_', expand=True
+
+# drop the combined column
+data_melted.drop(columns='Attribute_Ticker', inplace=True)
+
+# pivot to wide format with Ticker & Attribute
+data_pivoted = data_melted.pivot_table(index=['Date', 'Ticker'], columns='Attribute', values='value', aggfunc='first')
+
+# reset index to turn multi-index into columns
+stock_data = data_pivoted.reset_index()
+
+stock_data['Date'] = pd.to_datetime(stock_data['Date'])
+
+stock_data.set_index('Date', inplace=True)
+stock_data.reset_index(inplace=True)
+plt.figure(figsize=(14, 7))
+sns.set(style='whitegrid')
+
+sns.lineplot(data=stock_data, x='Date', y='Adj Close', hue='Ticker')
+plt.title('Adjusted Close Price Over Time (1 Year)', fontsize=16)
+plt.xlabel('Date', fontsize=14)
+plt.ylabel('Adjusted Close Price', fontsize=14)
+plt.legend(title='Ticker', title_fontsize='13', fontsize='11')
+plt.grid(True)
+plt.xticks(rotation=45)
+plt.show()
+
+short_window = 50
+long_window = 200                                                                                 
+
+# set the 'Date' column as the index
+stock_data.set_index('Date', inplace=True) # inplace=True permanently modifies the original DataFrame
+
+# define unique_tickers from the 'Ticker' column
+unique_tickers = stock_data['Ticker'].unique()
+
+# create a for loop 
+for ticker in unique_tickers:
+    ticker_data = stock_data[stock_data['Ticker'] == ticker].copy()
+    ticker_data['50_MA'] = ticker_data['Adj Close'].rolling(window=short_window).mean()
+    ticker_data['200_MA'] = ticker_data['Adj Close'].rolling(window=long_window).mean()
+
+    plt.figure(figsize=(10, 5))
+    plt.plot(ticker_data.index, ticker_data['Adj Close'], label='Adj Close')
+    plt.plot(ticker_data.index, ticker_data['50_MA'], label='50-Day MA')
+    plt.plot(ticker_data.index, ticker_data['200_MA'], label='200-Day MA')
+    plt.title(f'{ticker} - Adjusted Close and Moving Averages')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    plt.legend()
+    plt.grid(True)
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+# add the column 'Daily Return' as the daily percent change of 'Adj Close'
+stock_data['Daily Return'] = stock_data.groupby('Ticker')['Adj Close'].pct_change()
+
+plt.figure(figsize=(14, 7))
+sns.set(style='whitegrid')
+
+# produce a histogram showing the distribution of 'Daily Returns'
+for ticker in unique_tickers:
+    ticker_data = stock_data[stock_data['Ticker'] == ticker]
+    sns.histplot(ticker_data['Daily Return'].dropna(), bins=50, kde=True, label=ticker, alpha=0.5)
+    
+plt.title('Distribution of Daily Returns', fontsize=16)
+plt.xlabel('Daily Return', fontsize=14)
+plt.ylabel('Frequency', fontsize=14)
+plt.legend(title='Ticker', title_fontsize='13', fontsize='11')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# create a pivot table of daily returns
+daily_returns = stock_data.pivot_table(index='Date', columns='Ticker', values='Daily Return')
+
+# annualize the volatility
+volatility = daily_returns.std() * np.sqrt(252) 
+
+stock_stats = pd.DataFrame({
+    'Expected Return': expected_returns,
+    'Volatility': volatility
+})
+stock_stats  
